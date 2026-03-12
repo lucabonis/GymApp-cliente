@@ -1,124 +1,93 @@
-const CACHE_NAME = 'gymapp-v2';
+const CACHE_NAME = 'gymapp-v3';
 
-// ─── INSTALL: skipWaiting immediato, nessun precache che può fallire ───────
+// Asset sicuri da cachare subito — solo file statici certi
+const ASSETS = [
+  '/manifest.json',
+];
+
+// ─── INSTALL ───────────────────────────────────────────────────────────────
 self.addEventListener('install', e => {
-  e.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.add('/manifest.json').catch(() => {}))
-      .then(() => self.skipWaiting())
-  );
+  e.waitUntil((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    // Promise.allSettled: se un asset fallisce non blocca l'installazione
+    await Promise.allSettled(ASSETS.map(url => cache.add(url).catch(() => {})));
+    self.skipWaiting();
+  })());
 });
 
 // ─── ACTIVATE: rimuove cache vecchie ──────────────────────────────────────
 self.addEventListener('activate', e => {
-  e.waitUntil(
-    caches.keys()
-      .then(keys => Promise.all(
-        keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k))
-      ))
-      .then(() => self.clients.claim())
-  );
+  e.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(keys.map(k => k !== CACHE_NAME ? caches.delete(k) : null));
+    self.clients.claim();
+  })());
 });
 
 // ─── FETCH ─────────────────────────────────────────────────────────────────
 self.addEventListener('fetch', e => {
-  const { request } = e;
-  const url = new URL(request.url);
+  const req = e.request;
+  const url = new URL(req.url);
 
   // Ignora tutto ciò che non è GET
-  if (request.method !== 'GET') return;
+  if (req.method !== 'GET') return;
 
   // Ignora schemi non http
   if (!url.protocol.startsWith('http')) return;
 
-  const isSupabase = url.hostname.includes('supabase.co');
-  const isNextStatic = url.pathname.startsWith('/_next/static/');
-  const isNextImage = url.pathname.startsWith('/_next/image');
-  const isSameOrigin = url.origin === self.location.origin;
-
-  if (!isSameOrigin && !isSupabase) return;
-
-  if (isNextStatic) {
-    // Asset statici Next.js: cache-first (hash nel nome, non cambiano mai)
-    e.respondWith(
-      caches.match(request).then(cached => {
-        if (cached) return cached;
-        return fetch(request).then(res => {
-          if (res.ok) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
-          }
-          return res;
-        });
-      })
-    );
+  // Supabase: sempre solo rete, mai cachare dati autenticati
+  if (url.hostname.includes('supabase.co')) {
+    e.respondWith(fetch(req).catch(() => Response.error()));
     return;
   }
 
-  if (isSupabase) {
-    // Dati Supabase: network-first, fallback cache
-    e.respondWith(
-      fetch(request)
-        .then(res => {
-          if (res.ok) {
-            const clone = res.clone();
-            caches.open(CACHE_NAME).then(cache => cache.put(request, clone));
-          }
-          return res;
-        })
-        .catch(() => caches.match(request))
-    );
-    return;
-  }
-
-  if (isSameOrigin && !isNextImage) {
-    // Pagine app: stale-while-revalidate
-    // Mostra subito la cache (se disponibile), aggiorna in background
-    e.respondWith(
-      caches.open(CACHE_NAME).then(cache =>
-        cache.match(request).then(cached => {
-          const networkFetch = fetch(request)
-            .then(res => {
-              if (res.ok) cache.put(request, res.clone());
-              return res;
-            })
-            .catch(() => cached);
-          return cached || networkFetch;
-        })
-      )
-    );
-  }
-});
-
-// ─── BACKGROUND SYNC ───────────────────────────────────────────────────────
-self.addEventListener('sync', e => {
-  if (e.tag === 'gymapp-sync') {
-    e.waitUntil(processPendingQueue());
-  }
-});
-
-async function processPendingQueue() {
-  let db;
-  try { db = await openDB(); } catch { return; }
-
-  const actions = await getAllPending(db);
-  for (const action of actions) {
-    try {
-      const res = await fetch(action.url, {
-        method: action.method || 'POST',
-        headers: action.headers || { 'Content-Type': 'application/json' },
-        body: action.body,
-      });
-      if (res.ok) {
-        await deletePending(db, action.id);
-        const clients = await self.clients.matchAll();
-        clients.forEach(c => c.postMessage({ type: 'SYNC_COMPLETE', action: action.tag }));
+  // Navigazioni (cambio pagina): network-first, fallback cache
+  if (req.mode === 'navigate') {
+    e.respondWith((async () => {
+      try {
+        const fresh = await fetch(req);
+        const cache = await caches.open(CACHE_NAME);
+        cache.put(req, fresh.clone());
+        return fresh;
+      } catch {
+        const cache = await caches.open(CACHE_NAME);
+        return await cache.match(req) || await cache.match('/') || Response.error();
       }
-    } catch {
-      // Lascia in coda, riprova al prossimo sync
-    }
+    })());
+    return;
   }
-}
+
+  // Asset statici Next.js (/_next/static/): cache-first, hanno hash nel nome
+  if (url.pathname.startsWith('/_next/static/')) {
+    e.respondWith((async () => {
+      const cache = await caches.open(CACHE_NAME);
+      const cached = await cache.match(req);
+      if (cached) return cached;
+      try {
+        const fresh = await fetch(req);
+        if (fresh.ok) cache.put(req, fresh.clone());
+        return fresh;
+      } catch {
+        return Response.error();
+      }
+    })());
+    return;
+  }
+
+  // Tutto il resto: cache-first poi rete
+  e.respondWith((async () => {
+    const cache = await caches.open(CACHE_NAME);
+    const cached = await cache.match(req);
+    if (cached) return cached;
+    try {
+      const fresh = await fetch(req);
+      if (fresh.ok) cache.put(req, fresh.clone());
+      return fresh;
+    } catch {
+      return Response.error();
+    }
+  })());
+});
 
 // ─── PUSH NOTIFICATIONS ────────────────────────────────────────────────────
 self.addEventListener('push', e => {
@@ -139,31 +108,3 @@ self.addEventListener('notificationclick', e => {
   e.notification.close();
   e.waitUntil(self.clients.openWindow(e.notification.data || '/home'));
 });
-
-// ─── INDEXEDDB helpers ─────────────────────────────────────────────────────
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open('gymapp-offline', 1);
-    req.onupgradeneeded = ev => {
-      ev.target.result.createObjectStore('pending', { keyPath: 'id', autoIncrement: true });
-    };
-    req.onsuccess = ev => resolve(ev.target.result);
-    req.onerror = ev => reject(ev.target.error);
-  });
-}
-
-function getAllPending(db) {
-  return new Promise((resolve, reject) => {
-    const req = db.transaction('pending', 'readonly').objectStore('pending').getAll();
-    req.onsuccess = ev => resolve(ev.target.result || []);
-    req.onerror = ev => reject(ev.target.error);
-  });
-}
-
-function deletePending(db, id) {
-  return new Promise((resolve, reject) => {
-    const req = db.transaction('pending', 'readwrite').objectStore('pending').delete(id);
-    req.onsuccess = () => resolve();
-    req.onerror = ev => reject(ev.target.error);
-  });
-}

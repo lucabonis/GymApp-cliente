@@ -36,6 +36,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       navigator.serviceWorker.register('/sw.js').catch(() => {});
     }
 
+    // Blocca zoom pinch su iOS Safari (ignora user-scalable=no via meta tag)
+    const preventZoom = (e: TouchEvent) => { if (e.touches.length > 1) e.preventDefault(); };
+    const preventGesture = (e: Event) => e.preventDefault();
+    document.addEventListener('touchmove', preventZoom, { passive: false });
+    document.addEventListener('gesturestart', preventGesture);
+    document.addEventListener('gesturechange', preventGesture);
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session && !isLogin) router.replace('/login');
       setReady(true);
@@ -49,6 +56,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       subscription.unsubscribe();
       window.removeEventListener('storage', onStorage);
       clearInterval(interval);
+      document.removeEventListener('touchmove', preventZoom);
+      document.removeEventListener('gesturestart', preventGesture);
+      document.removeEventListener('gesturechange', preventGesture);
     };
   }, []);
 
