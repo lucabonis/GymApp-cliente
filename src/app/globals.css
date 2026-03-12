@@ -1,0 +1,88 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --accent: #FF6B35;
+  --bg: #f5f5f7;
+  --bg-card: #ffffff;
+  --bg-input: #f0f0f2;
+  --text: #111111;
+  --text-sub: #666666;
+  --text-muted: #999999;
+  --border: #e8e8e8;
+  --tab-bar: #ffffff;
+}
+
+[data-theme="dark"] {
+  --bg: #0f0f0f;
+  --bg-card: #1a1a1a;
+  --bg-input: #222222;
+  --text: #f0f0f0;
+  --text-sub: #aaaaaa;
+  --text-muted: #666666;
+  --border: #2a2a2a;
+  --tab-bar: #141414;
+}
+
+* { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  overscroll-behavior: none;
+}
+
+/* Scrollbar hide */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Card */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+}
+
+/* Input */
+.inp {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  font-size: 15px;
+  color: var(--text);
+  width: 100%;
+  outline: none;
+  transition: border-color .2s;
+}
+.inp:focus { border-color: var(--accent); }
+
+/* Accent btn */
+.btn-accent {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 14px 20px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.btn-accent:disabled { opacity: .6; }
+
+/* Tag */
+.tag {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
