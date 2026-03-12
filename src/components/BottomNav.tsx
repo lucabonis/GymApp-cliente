@@ -49,7 +49,7 @@ export default function BottomNav() {
             flexDirection: 'column',
             alignItems: 'center',
             gap: 2,
-            padding: '10px 0',
+            padding: '12px 0',
             color: active ? 'var(--accent)' : 'var(--text-muted)',
             textDecoration: 'none',
             fontSize: 10,
