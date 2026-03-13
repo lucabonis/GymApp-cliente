@@ -58,9 +58,16 @@ export default function CorsiPage() {
   }, []);
 
   async function loadData() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    setUserId(user.id);
+    let uid = '';
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) { uid = user.id; setUserId(user.id); }
+    } catch {}
+    if (!uid) {
+      // fallback offline
+      try { const saved = localStorage.getItem('GA_user'); if (saved) { uid = JSON.parse(saved).id; setUserId(uid); } } catch {}
+    }
+    if (!uid) return;
 
     const from = new Date(); from.setDate(from.getDate() - 7);
     const to = new Date(); to.setDate(to.getDate() + 35);

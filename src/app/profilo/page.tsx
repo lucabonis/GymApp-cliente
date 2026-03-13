@@ -40,18 +40,26 @@ export default function ProfiloPage() {
   }, []);
 
   async function loadData() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    let uid = '';
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) uid = user.id;
+    } catch {}
+    if (!uid) {
+      try { const saved = localStorage.getItem('GA_user'); if (saved) uid = JSON.parse(saved).id; } catch {}
+    }
+    if (!uid) return;
+
     const [{ data: prof }, { data: subscription }, { data: subs }, { data: prods }] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', user.id).single(),
+      supabase.from('profiles').select('*').eq('id', uid).single(),
       supabase.from('subscriptions').select('*,subscription_plans(name,price)')
-        .eq('client_id', user.id).eq('gym_id', GYM_ID).eq('status', 'active')
+        .eq('client_id', uid).eq('gym_id', GYM_ID).eq('status', 'active')
         .order('end_date', { ascending: false }).limit(1).single(),
       supabase.from('subscriptions').select('*,subscription_plans(name,price)')
-        .eq('client_id', user.id).eq('gym_id', GYM_ID)
+        .eq('client_id', uid).eq('gym_id', GYM_ID)
         .order('start_date', { ascending: false }).limit(20),
       supabase.from('product_sales').select('*')
-        .eq('client_id', user.id).eq('gym_id', GYM_ID)
+        .eq('client_id', uid).eq('gym_id', GYM_ID)
         .order('sold_at', { ascending: false }).limit(20),
     ]);
     if (!prof) return;
@@ -82,6 +90,7 @@ export default function ProfiloPage() {
 
   async function handleLogout() {
     localStorage.removeItem(CACHE_KEY);
+    localStorage.removeItem('GA_user');
     await supabase.auth.signOut();
     router.replace('/login');
   }
@@ -190,14 +199,12 @@ export default function ProfiloPage() {
 
           {/* Impostazioni */}
           <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 18, overflow: 'hidden' }}>
-            {/* Tema */}
             <div style={{ padding: '16px 18px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ fontSize: 15, color: 'var(--text)' }}>🌙 Tema {theme === 'dark' ? 'Scuro' : 'Chiaro'}</div>
               <div onClick={toggleTheme} style={{ width: 50, height: 28, borderRadius: 14, background: theme === 'dark' ? 'var(--accent)' : 'var(--border)', position: 'relative', cursor: 'pointer', transition: 'background .2s' }}>
                 <div style={{ position: 'absolute', top: 3, left: theme === 'dark' ? 24 : 3, width: 22, height: 22, borderRadius: '50%', background: '#fff', transition: 'left .2s' }} />
               </div>
             </div>
-            {/* Cambia password */}
             <div onClick={() => setChangePw(!changePw)} style={{ padding: '16px 18px', borderBottom: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div style={{ fontSize: 15, color: 'var(--text)' }}>🔑 Cambia password</div>
               <span style={{ color: 'var(--text-muted)' }}>{changePw ? '▲' : '›'}</span>
@@ -209,7 +216,6 @@ export default function ProfiloPage() {
                 <button className="btn-accent" type="submit">Aggiorna</button>
               </form>
             )}
-            {/* Logout */}
             <div onClick={handleLogout} style={{ padding: '16px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: 15 }}>🚪</span>
               <span style={{ fontSize: 15, color: '#ef4444', fontWeight: 700 }}>Esci</span>

@@ -83,9 +83,15 @@ export default function SchedePage() {
   }, [timerRunning]);
 
   async function loadList() {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    setUserId(user.id);
+    let uid = '';
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) { uid = user.id; setUserId(user.id); }
+    } catch {}
+    if (!uid) {
+      try { const saved = localStorage.getItem('GA_user'); if (saved) { uid = JSON.parse(saved).id; setUserId(uid); } } catch {}
+    }
+    if (!uid) return;
     const [{ data: asgn }, { data: wlogs }] = await Promise.all([
       supabase.from('workout_assignments').select('*,workout_templates(id,name,goal,level,workout_days(id,name,day_number,workout_exercises(id,exercises(name,muscle_groups))))').eq('client_id', user.id).eq('is_active', true),
       supabase.from('workout_logs').select('*').eq('client_id', user.id).order('completed_at', { ascending: false }).limit(50),
