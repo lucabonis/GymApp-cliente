@@ -93,8 +93,8 @@ export default function SchedePage() {
     }
     if (!uid) return;
     const [{ data: asgn }, { data: wlogs }] = await Promise.all([
-      supabase.from('workout_assignments').select('*,workout_templates(id,name,goal,level,workout_days(id,name,day_number,workout_exercises(id,exercises(name,muscle_groups))))').eq('client_id', user.id).eq('is_active', true),
-      supabase.from('workout_logs').select('*').eq('client_id', user.id).order('completed_at', { ascending: false }).limit(50),
+      supabase.from('workout_assignments').select('*,workout_templates(id,name,goal,level,workout_days(id,name,day_number,workout_exercises(id,exercises(name,muscle_groups))))').eq('client_id', uid).eq('is_active', true),
+      supabase.from('workout_logs').select('*').eq('client_id', uid).order('completed_at', { ascending: false }).limit(50),
     ]);
     if (!asgn && !wlogs) return; // offline
     if (asgn) { setAssignments(asgn); try { localStorage.setItem(CACHE_ASSIGNMENTS, JSON.stringify(asgn)); } catch {} }
