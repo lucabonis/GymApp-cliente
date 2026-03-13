@@ -93,7 +93,7 @@ export default function SchedePage() {
     }
     if (!uid) return;
     const [{ data: asgn }, { data: wlogs }] = await Promise.all([
-      supabase.from('workout_assignments').select('*,workout_templates(id,name,goal,level,workout_days(id,name,day_number,workout_exercises(id,exercises(name,muscle_groups))))').eq('client_id', uid).eq('is_active', true),
+      supabase.from('workout_assignments').select('*,workout_templates(id,name,goal,level,workout_days(id,name,day_number,workout_exercises(id,sets,reps,rest_seconds,weight,notes,exercises(name,muscle_groups))))').eq('client_id', uid).eq('is_active', true),
       supabase.from('workout_logs').select('*').eq('client_id', uid).order('completed_at', { ascending: false }).limit(50),
     ]);
     if (!asgn && !wlogs) return; // offline
@@ -110,8 +110,14 @@ export default function SchedePage() {
   });
 
   async function avvia(routine: any) {
-    const { data: day } = await supabase.from('workout_days').select('*,workout_exercises(*,exercises(name,muscle_groups))').eq('id', routine.dayId).single();
-    const exs: any[] = day?.workout_exercises || [];
+    let exs: any[] = [];
+    if (navigator.onLine) {
+      const { data: day } = await supabase.from('workout_days').select('*,workout_exercises(*,exercises(name,muscle_groups))').eq('id', routine.dayId).single();
+      exs = day?.workout_exercises || [];
+    } else {
+      // Offline: usa gli esercizi già in cache dal loadList
+      exs = routine.exercises || [];
+    }
     const initLogs: Record<string, SetLog[]> = {};
     exs.forEach((ex: any) => { initLogs[ex.id] = Array.from({ length: ex.sets || 3 }, () => ({ w: ex.weight || '', r: ex.reps || '', done: false })); });
     startTimeRef.current = Date.now();
@@ -174,7 +180,9 @@ export default function SchedePage() {
     }
 
     stopTimer(); setActiveWorkout(null); setConfirmFinish(false);
-    setScreen('list'); setTab('passati'); loadList();
+    setScreen('list');
+    await loadList();
+    setTab('passati');
   }
 
   function startTimer(secs: number) { clearInterval(timerRef.current); setTimerVal(secs); setTimerRunning(true); }
@@ -197,9 +205,16 @@ export default function SchedePage() {
 
   async function openStorico(exNameStr: string) {
     setStoricoName(exNameStr); setStoricoData([]); setStoricoModal(true);
-    const { data: wlogs } = await supabase.from('workout_logs').select('completed_at,day_name,logs').eq('client_id', userId).order('completed_at', { ascending: false }).limit(50);
+    let wlogs: any[] = [];
+    if (navigator.onLine) {
+      const { data } = await supabase.from('workout_logs').select('completed_at,day_name,logs').eq('client_id', userId).order('completed_at', { ascending: false }).limit(50);
+      wlogs = data || [];
+    } else {
+      // Offline: usa cache locale
+      try { wlogs = JSON.parse(localStorage.getItem(CACHE_LOGS) || '[]'); } catch {}
+    }
     const results: any[] = [];
-    (wlogs || []).forEach((log: any) => {
+    wlogs.forEach((log: any) => {
       if (!log.logs) return;
       esercizi.forEach((ex: any) => {
         if ((ex.exercises?.name || '').toLowerCase().trim() !== exNameStr.toLowerCase().trim()) return;
