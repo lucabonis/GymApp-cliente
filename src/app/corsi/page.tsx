@@ -80,7 +80,7 @@ export default function CorsiPage() {
         .order('start_time', { ascending: true }),
       supabase.from('course_bookings')
         .select('session_id,id,status,booked_at,course_sessions(start_time,courses(name,color))')
-        .eq('client_id', user.id).eq('status', 'confirmed'),
+        .eq('client_id', uid).eq('status', 'confirmed'),
     ]);
 
     if (sessErr) return; // offline
