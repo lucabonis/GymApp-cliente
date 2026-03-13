@@ -44,12 +44,32 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     document.addEventListener('gesturechange', preventGesture);
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!session && !isLogin) router.replace('/login');
-      setReady(true);
+      if (session?.user) {
+        // Salva utente in locale per login automatico offline
+        try { localStorage.setItem('GA_user', JSON.stringify({ id: session.user.id, email: session.user.email })); } catch {}
+        setReady(true);
+      } else {
+        // Offline o sessione scaduta — prova con utente salvato localmente
+        try {
+          const saved = localStorage.getItem('GA_user');
+          if (saved && !navigator.onLine) {
+            // Offline: entra senza Supabase
+            setReady(true);
+            return;
+          }
+        } catch {}
+        if (!isLogin) router.replace('/login');
+        setReady(true);
+      }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') router.replace('/login');
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        try { localStorage.removeItem('GA_user'); } catch {}
+        router.replace('/login');
+      } else if (session?.user) {
+        try { localStorage.setItem('GA_user', JSON.stringify({ id: session.user.id, email: session.user.email })); } catch {}
+      }
     });
 
     return () => {
